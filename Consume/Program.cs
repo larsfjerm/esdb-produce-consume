@@ -14,7 +14,8 @@ async Task Consume(FromAll position)
     subscription = await client.SubscribeToAllAsync(
         position,
         (_, resolved, ct) => Appeared(resolved),
-        subscriptionDropped: (_, reason, exc) => SubscriptionDropped(reason, exc));
+        subscriptionDropped: (_, reason, exc) => SubscriptionDropped(reason, exc),
+        filterOptions: new SubscriptionFilterOptions(EventTypeFilter.ExcludeSystemEvents()));
 }
 
 Task Appeared(ResolvedEvent evt)

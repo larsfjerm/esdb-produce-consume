@@ -3,7 +3,8 @@ using EventStore.Client;
 
 using var client = new EventStoreClient(EventStoreClientSettings.Create("esdb://localhost:2113?tls=false"));
 using var bufferPool = MemoryPool<byte>.Shared;
-var random = new Random();
+
+Random random = new();
 
 const int MAX_EVENT_SIZE = 256;
 
@@ -11,17 +12,12 @@ while (true)
 {
     Console.WriteLine("Producing...");
 
-    var tasks = new List<Task>();
-    for (var n = 1; n <= 10; n++) 
-    {
-        tasks.Add(Produce($"n{n}"));
-    }
+    await Produce("space");
 
-    await Task.WhenAll(tasks);
     await Task.Delay(1_000);
 }
 
-async Task Produce(string streamNamespace, int streamsCount = 10, int eventsPerStream = 5) 
+async Task Produce(string streamNamespace, int streamsCount = 100, int eventsPerStream = 10) 
 {
     var tasks = new Task[streamsCount];
 
@@ -42,7 +38,6 @@ async Task Produce(string streamNamespace, int streamsCount = 10, int eventsPerS
 
     EventData GenerateRandomEventData(string eventType, string contentType = "application/octet-stream") 
     {
-
         var eventId = Uuid.NewUuid();
 
         var size = random.Next(MAX_EVENT_SIZE);

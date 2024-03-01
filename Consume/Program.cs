@@ -2,40 +2,48 @@
 
 using var client = new EventStoreClient(EventStoreClientSettings.Create("esdb://localhost:2113?tls=false"));
 var count = 0;
-Position checkpoint = default;
-StreamSubscription? subscription = default;
+FromAll checkpoint = default;
 
-await Consume(FromAll.End);
+_ = Consume(FromAll.End);
 
 async Task Consume(FromAll position) 
 {
     Console.WriteLine("Consuming...");
 
-    subscription = await client.SubscribeToAllAsync(
-        position,
-        (_, resolved, ct) => Appeared(resolved),
-        subscriptionDropped: (_, reason, exc) => SubscriptionDropped(reason, exc),
-        filterOptions: new SubscriptionFilterOptions(EventTypeFilter.ExcludeSystemEvents()));
-}
+    try
+    {
+        await using var subscription = client.SubscribeToAll(
+            position,
+            filterOptions: new SubscriptionFilterOptions(EventTypeFilter.ExcludeSystemEvents()));
 
-Task Appeared(ResolvedEvent evt)
-{
-    count++;
-    checkpoint = evt.Event.Position;
-    return Task.CompletedTask;
-}
+        await foreach (var message in subscription.Messages)
+        {
+            count++;
 
-Task SubscriptionDropped(SubscriptionDroppedReason reason, Exception? exception)
-{
-    Console.WriteLine("SubscriptionDropped");
-    Console.WriteLine($"Events Handled Count: {count}");
+            if (message is StreamMessage.Event(var resolved))
+            {
+                if (resolved.OriginalPosition is not null)
+                {
+                    checkpoint = FromAll.After(resolved.OriginalPosition.Value);
+                }
+            }
+        }
+    }
+    catch (OperationCanceledException)
+    {
+        Console.WriteLine($"Subscription was canceled.");
+    }
+    catch (ObjectDisposedException)
+    {
+        Console.WriteLine($"Subscription was canceled by the user.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Subscription dropped: {ex}");
+        Console.WriteLine($"Events Handled Count: {count}");
 
-    subscription?.Dispose();
-
-    if (reason != SubscriptionDroppedReason.Disposed)
-        return Consume(FromAll.After(checkpoint));
-
-    return Task.CompletedTask;
+        await Consume(checkpoint);
+    }
 }
 
 Console.ReadLine();
